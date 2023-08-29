@@ -14,6 +14,12 @@ func BenchmarkOpenAllFilesNoDefer(b *testing.B) {
 	}
 }
 
+func BenchmarkOpenAllFilesLeakFileHandles(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		main.OpenAllFilesLeakFileHandles()
+	}
+}
+
 func BenchmarkOpenAllFilesDefer(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		main.OpenAllFilesDefer()

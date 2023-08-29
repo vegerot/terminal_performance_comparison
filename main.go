@@ -11,7 +11,7 @@ import (
 
 func main() {
 	start := time.Now()
-	chunkSize := 100
+	chunkSize := 12
 	files := 100
 	if len(os.Args) == 1 {
 		benchmark(1)
@@ -49,6 +49,30 @@ func main() {
 	fmt.Printf("program time: %s\n", time.Since(start))
 }
 
+func benchmark(N int) {
+
+	now := time.Now()
+	for i := 0; i < N; i++ {
+		OpenAllFilesNoDefer()
+	}
+	durationPerRun := time.Since(now) / time.Duration(N)
+	fmt.Printf("OpenAllFilesNoDefer: %s\n", durationPerRun)
+
+	now = time.Now()
+	for i := 0; i < N; i++ {
+		OpenAllFilesDefer()
+	}
+	durationPerRun = time.Since(now) / time.Duration(N)
+	fmt.Printf("OpenAllFilesDefer: %s\n", durationPerRun)
+
+	now = time.Now()
+	for i := 0; i < N; i++ {
+		OpenAllFilesLeakFileHandles()
+	}
+	durationPerRun = time.Since(now) / time.Duration(N)
+	fmt.Printf("OpenAllFilesLeakFileHandles: %s\n", durationPerRun)
+}
+
 func createFiles(n int) {
 	// create files directory
 	err := os.Mkdir("files", 0700)
@@ -69,6 +93,7 @@ func createFiles(n int) {
 		}
 	}
 }
+
 func OpenAllFilesNoDefer() {
 	files, err := os.ReadDir("files/")
 	if err != nil {
@@ -85,6 +110,15 @@ func OpenAllFilesDefer() {
 	}
 
 	openTheseFilesDefer(files)
+}
+
+func OpenAllFilesLeakFileHandles() {
+	files, err := os.ReadDir("files/")
+	if err != nil {
+		panic(err)
+	}
+
+	openTheseFilesLeakFileHandles(files)
 }
 
 func OpenAllFilesNoDeferChunked(chunkSize int) {
@@ -154,20 +188,11 @@ func openTheseFilesDefer(files []os.DirEntry) {
 	}
 }
 
-func benchmark(runs int) {
-	// benchmark OpenAllFilesNoDefer vs OpenAllFilesDefer
-	N := runs
-	now := time.Now()
-	for i := 0; i < N; i++ {
-		OpenAllFilesNoDefer()
+func openTheseFilesLeakFileHandles(files []os.DirEntry) {
+	for _, file := range files {
+		_, err := os.Open(fmt.Sprintf("files/%s", file.Name()))
+		if err != nil {
+			panic(err)
+		}
 	}
-	durationPerRun := time.Since(now) / time.Duration(N)
-	fmt.Printf("OpenAllFilesNoDefer: %s\n", durationPerRun)
-
-	now = time.Now()
-	for i := 0; i < N; i++ {
-		OpenAllFilesDefer()
-	}
-	durationPerRun = time.Since(now) / time.Duration(N)
-	fmt.Printf("OpenAllFilesDefer: %s\n", durationPerRun)
 }
