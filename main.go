@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -15,7 +13,7 @@ func main() {
 	chunkSize := 100
 	files := 100
 	if len(os.Args) == 1 {
-		OpenAllFilesNoDeferChunked(chunkSize)
+		benchmark()
 		return
 	}
 
@@ -25,26 +23,30 @@ func main() {
 	case "create":
 		createFiles(files)
 	case "nodefer":
-		OpenAllFilesNoDeferChunked(chunkSize)
+		OpenAllFilesNoDefer()
 	case "defer":
+		OpenAllFilesDefer()
+	case "nodefer-chunk":
+		OpenAllFilesNoDeferChunked(chunkSize)
+	case "defer-chunk":
 		OpenAllFilesDeferChunked(chunkSize)
+	case "bench":
+		benchmark()
 	default:
-		log.Fatalf("unknown arg: %s", arg)
+		log.Fatalf("unknown command: %s", arg)
 	}
 	fmt.Println(time.Since(start))
 }
 
 func createFiles(n int) {
+	// create files directory
+	err := os.Mkdir("files", 0700)
+	if err != nil {
+		panic(err)
+	}
 	for i := 0; i < n; i++ {
 		// create file
 		f, err := os.Create(fmt.Sprintf("files/file%d.txt", i))
-		if err != nil {
-			panic(err)
-		}
-
-		// write to file
-		longString := strings.Repeat("a", 2<<16)
-		_, err = f.Write([]byte(longString))
 		if err != nil {
 			panic(err)
 		}
@@ -56,9 +58,26 @@ func createFiles(n int) {
 		}
 	}
 }
+func OpenAllFilesNoDefer() {
+	files, err := os.ReadDir("files/")
+	if err != nil {
+		panic(err)
+	}
+
+	openTheseFilesNoDefer(files)
+}
+
+func OpenAllFilesDefer() {
+	files, err := os.ReadDir("files/")
+	if err != nil {
+		panic(err)
+	}
+
+	openTheseFilesDefer(files)
+}
+
 func OpenAllFilesNoDeferChunked(chunkSize int) {
-	cwd, _ := os.Getwd()
-	files, err := os.ReadDir(filepath.Join(cwd, "files"))
+	files, err := os.ReadDir("files/")
 	if err != nil {
 		panic(err)
 	}
@@ -77,8 +96,7 @@ func OpenAllFilesNoDeferChunked(chunkSize int) {
 }
 
 func OpenAllFilesDeferChunked(chunkSize int) {
-	cwd, _ := os.Getwd()
-	files, err := os.ReadDir(filepath.Join(cwd, "files"))
+	files, err := os.ReadDir("files/")
 	if err != nil {
 		panic(err)
 	}
@@ -106,15 +124,8 @@ func chunk[T interface{}](list []T, size int) [][]T {
 }
 
 func openTheseFilesNoDefer(files []os.DirEntry) {
-	cwd, _ := os.Getwd()
 	for _, file := range files {
-		f, err := os.Open(filepath.Join(cwd, "files", file.Name()))
-		if err != nil {
-			panic(err)
-		}
-		buf := make([]byte, 1024)
-		_, err = f.Read(buf)
-		addOneToEverything(buf)
+		f, err := os.Open(fmt.Sprintf("files/%s", file.Name()))
 		if err != nil {
 			panic(err)
 		}
@@ -123,24 +134,29 @@ func openTheseFilesNoDefer(files []os.DirEntry) {
 }
 
 func openTheseFilesDefer(files []os.DirEntry) {
-	cwd, _ := os.Getwd()
 	for _, file := range files {
-		f, err := os.Open(filepath.Join(cwd, "files", file.Name()))
+		f, err := os.Open(fmt.Sprintf("files/%s", file.Name()))
 		defer f.Close()
-		if err != nil {
-			panic(err)
-		}
-		buf := make([]byte, 1024)
-		_, err = f.Read(buf)
-		addOneToEverything(buf)
 		if err != nil {
 			panic(err)
 		}
 	}
 }
 
-func addOneToEverything(buf []byte) {
-	for i := range buf {
-		buf[i]++
+func benchmark() {
+	// benchmark OpenAllFilesNoDefer vs OpenAllFilesDefer
+	N := 2
+	now := time.Now()
+	for i := 0; i < N; i++ {
+		OpenAllFilesNoDefer()
 	}
+	durationPerRun := time.Since(now) / time.Duration(N)
+	fmt.Printf("OpenAllFilesNoDefer: %s\n", durationPerRun)
+
+	now = time.Now()
+	for i := 0; i < N; i++ {
+		OpenAllFilesDefer()
+	}
+	durationPerRun = time.Since(now) / time.Duration(N)
+	fmt.Printf("OpenAllFilesDefer: %s\n", durationPerRun)
 }
