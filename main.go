@@ -50,27 +50,36 @@ func main() {
 }
 
 func benchmark(N int) {
-
-	now := time.Now()
-	for i := 0; i < N; i++ {
-		OpenAllFilesNoDefer()
+	{
+		now := time.Now()
+		for i := 0; i < N; i++ {
+			OpenAllFilesNoDefer()
+		}
+		durationPerRun := time.Since(now) / time.Duration(N)
+		fmt.Printf("OpenAllFilesNoDefer: %s\n", durationPerRun)
 	}
-	durationPerRun := time.Since(now) / time.Duration(N)
-	fmt.Printf("OpenAllFilesNoDefer: %s\n", durationPerRun)
 
-	now = time.Now()
-	for i := 0; i < N; i++ {
-		OpenAllFilesDefer()
+	{
+		now := time.Now()
+		for i := 0; i < N; i++ {
+			OpenAllFilesDefer()
+		}
+		durationPerRun := time.Since(now) / time.Duration(N)
+		fmt.Printf("OpenAllFilesDefer: %s\n", durationPerRun)
 	}
-	durationPerRun = time.Since(now) / time.Duration(N)
-	fmt.Printf("OpenAllFilesDefer: %s\n", durationPerRun)
 
-	now = time.Now()
-	for i := 0; i < N; i++ {
-		OpenAllFilesLeakFileHandles()
+	// NOTE: OpenAllFilesDefer and OpenAllFilesLeakFileHandles have the same
+	// speed, but it depends on which order you run them in.  Rearrange these
+	// two blocks and you'll see their results swap
+
+	{
+		now := time.Now()
+		for i := 0; i < N; i++ {
+			OpenAllFilesLeakFileHandles()
+		}
+		durationPerRun := time.Since(now) / time.Duration(N)
+		fmt.Printf("OpenAllFilesLeakFileHandles: %s\n", durationPerRun)
 	}
-	durationPerRun = time.Since(now) / time.Duration(N)
-	fmt.Printf("OpenAllFilesLeakFileHandles: %s\n", durationPerRun)
 }
 
 func createFiles(n int) {
