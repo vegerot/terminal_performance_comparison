@@ -2,15 +2,40 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 )
 
 func main() {
-	create100Files()
+	start := time.Now()
+	chunkSize := 100
+	files := 100
+	if len(os.Args) == 1 {
+		OpenAllFilesNoDeferChunked(chunkSize)
+		return
+	}
+
+	args := os.Args[1:]
+
+	switch arg := args[0]; arg {
+	case "create":
+		createFiles(files)
+	case "nodefer":
+		OpenAllFilesNoDeferChunked(chunkSize)
+	case "defer":
+		OpenAllFilesDeferChunked(chunkSize)
+	default:
+		log.Fatalf("unknown arg: %s", arg)
+	}
+	fmt.Println(time.Since(start))
 }
 
-func create100Files() {
-	for i := 0; i < 100; i++ {
+func createFiles(n int) {
+	for i := 0; i < n; i++ {
 		// create file
 		f, err := os.Create(fmt.Sprintf("files/file%d.txt", i))
 		if err != nil {
@@ -18,7 +43,8 @@ func create100Files() {
 		}
 
 		// write to file
-		_, err = f.Write([]byte(fmt.Sprintf("This is file %d\n", i)))
+		longString := strings.Repeat("a", 2<<16)
+		_, err = f.Write([]byte(longString))
 		if err != nil {
 			panic(err)
 		}
@@ -30,34 +56,91 @@ func create100Files() {
 		}
 	}
 }
-
-func OpenAllFilesNoDefer() {
-	files, err := os.ReadDir("files/")
+func OpenAllFilesNoDeferChunked(chunkSize int) {
+	cwd, _ := os.Getwd()
+	files, err := os.ReadDir(filepath.Join(cwd, "files"))
 	if err != nil {
 		panic(err)
 	}
+
+	fileBaskets := chunk(files, chunkSize)
+
+	var wg sync.WaitGroup
+	for _, basket := range fileBaskets {
+		wg.Add(1)
+		go func(basket []os.DirEntry, wg *sync.WaitGroup) {
+			openTheseFilesNoDefer(basket)
+			wg.Done()
+		}(basket, &wg)
+	}
+	wg.Wait()
+}
+
+func OpenAllFilesDeferChunked(chunkSize int) {
+	cwd, _ := os.Getwd()
+	files, err := os.ReadDir(filepath.Join(cwd, "files"))
+	if err != nil {
+		panic(err)
+	}
+
+	fileBaskets := chunk(files, chunkSize)
+
+	var wg sync.WaitGroup
+	for _, basket := range fileBaskets {
+		wg.Add(1)
+		go func(basket []os.DirEntry, wg *sync.WaitGroup) {
+			defer wg.Done()
+			openTheseFilesDefer(basket)
+		}(basket, &wg)
+	}
+	wg.Wait()
+}
+
+func chunk[T interface{}](list []T, size int) [][]T {
+	var chunks [][]T
+	for size < len(list) {
+		list, chunks = list[size:], append(chunks, list[0:size:size])
+	}
+	chunks = append(chunks, list)
+	return chunks
+}
+
+func openTheseFilesNoDefer(files []os.DirEntry) {
+	cwd, _ := os.Getwd()
 	for _, file := range files {
-		// open file
-		f, err := os.Open(fmt.Sprintf("files/%s", file.Name()))
+		f, err := os.Open(filepath.Join(cwd, "files", file.Name()))
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 1024)
+		_, err = f.Read(buf)
+		addOneToEverything(buf)
 		if err != nil {
 			panic(err)
 		}
 		f.Close()
-
 	}
 }
 
-func OpenAllFilesDefer() {
-	files, err := os.ReadDir("files/")
-	if err != nil {
-		panic(err)
-	}
+func openTheseFilesDefer(files []os.DirEntry) {
+	cwd, _ := os.Getwd()
 	for _, file := range files {
-		// open file
-		f, err := os.Open(fmt.Sprintf("files/%s", file.Name()))
+		f, err := os.Open(filepath.Join(cwd, "files", file.Name()))
 		defer f.Close()
 		if err != nil {
 			panic(err)
 		}
+		buf := make([]byte, 1024)
+		_, err = f.Read(buf)
+		addOneToEverything(buf)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func addOneToEverything(buf []byte) {
+	for i := range buf {
+		buf[i]++
 	}
 }
