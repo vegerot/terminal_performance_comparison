@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -13,7 +14,7 @@ func main() {
 	chunkSize := 100
 	files := 100
 	if len(os.Args) == 1 {
-		benchmark()
+		benchmark(1)
 		return
 	}
 
@@ -31,11 +32,21 @@ func main() {
 	case "defer-chunk":
 		OpenAllFilesDeferChunked(chunkSize)
 	case "bench":
-		benchmark()
+		var runs int
+		if len(args) < 2 {
+			runs = 1
+		} else {
+			runss, err := strconv.Atoi(args[1])
+			runs = runss
+			if err != nil {
+				panic(err)
+			}
+		}
+		benchmark(runs)
 	default:
 		log.Fatalf("unknown command: %s", arg)
 	}
-	fmt.Println(time.Since(start))
+	fmt.Printf("program time: %s\n", time.Since(start))
 }
 
 func createFiles(n int) {
@@ -143,9 +154,9 @@ func openTheseFilesDefer(files []os.DirEntry) {
 	}
 }
 
-func benchmark() {
+func benchmark(runs int) {
 	// benchmark OpenAllFilesNoDefer vs OpenAllFilesDefer
-	N := 2
+	N := runs
 	now := time.Now()
 	for i := 0; i < N; i++ {
 		OpenAllFilesNoDefer()
